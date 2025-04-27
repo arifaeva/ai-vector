@@ -1,15 +1,19 @@
 from mistralai import Mistral
 from dotenv import load_dotenv
+from openai import OpenAI
 from langchain_experimental.text_splitter import SemanticChunker
 from langchain_openai.embeddings import OpenAIEmbeddings
 from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
 import chromadb
+import json
 import os
 
 load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
+
+openai_client = OpenAI()
 
 chroma_client = chromadb.HttpClient("localhost", 8010)
 
@@ -49,3 +53,30 @@ openai_ef = OpenAIEmbeddingFunction(
 #     documents = [doc.model_dump().get("page_content") for doc in documents],
 #     ids = [str(i) for i in range(len(documents))]
 # )
+
+collection = chroma_client.get_collection("monopoly-guide", embedding_function=openai_ef)
+
+result = collection.query(
+    query_texts=["What is player role of banker?"],
+    n_results=3,
+    include=["distances", "documents"]
+)
+
+# print(json.dumps(result, indent=3, sort_keys=True))
+
+response = openai_client.chat.completions.create(
+    model="gpt-4o",
+    messages=[
+        {
+            "role": "system",
+            "content": f"Your job is to answer based on the provided context only! This is the context: {result.get("documents")}" 
+        },
+        {
+            "role": "user",
+            "content": "What is player role of banker?"
+        }
+    ]
+)
+
+content = response.choices[0].message.content
+print(content)
